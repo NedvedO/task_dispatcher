@@ -1,11 +1,11 @@
 use std::time::Instant;
-
+ 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskKind {
     Cpu,
     Io,
 }
-
+ 
 impl std::fmt::Display for TaskKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -14,7 +14,7 @@ impl std::fmt::Display for TaskKind {
         }
     }
 }
-
+ 
 #[derive(Debug, Clone)]
 pub struct Task {
     pub id: u64,
@@ -23,7 +23,7 @@ pub struct Task {
     pub duration_ms: u64,
     pub cpu_cost: f64,
 }
-
+ 
 impl Task {
     pub fn cpu(id: u64, arrival_time: Instant) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl Task {
             cpu_cost: 35.0,
         }
     }
-
+ 
     pub fn io(id: u64, arrival_time: Instant) -> Self {
         Self {
             id,

@@ -4,15 +4,15 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-
+ 
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
-
+ 
 use crate::task::{Task, TaskKind};
 use crate::shared::SharedState;
-
+ 
 // ── Configuration ─────────────────────────────────────────────────────────────
-
+ 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Policy {
     /// Single FIFO queue. Dispatcher takes tasks in arrival order;
@@ -22,7 +22,7 @@ pub enum Policy {
     /// throughput without exceeding the 100 % CPU cap.
     Optimized,
 }
-
+ 
 impl std::fmt::Display for Policy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -31,7 +31,7 @@ impl std::fmt::Display for Policy {
         }
     }
 }
-
+ 
 #[derive(Clone)]
 pub struct Config {
     pub total_tasks: usize,
@@ -43,9 +43,9 @@ pub struct Config {
     /// Gap between consecutive task arrivals in milliseconds.
     pub arrival_interval_ms: u64,
 }
-
+ 
 // ── Metrics records ───────────────────────────────────────────────────────────
-
+ 
 pub struct CompletedRecord {
     pub task_id: u64,
     pub kind: TaskKind,
@@ -53,7 +53,7 @@ pub struct CompletedRecord {
     pub dispatch_time: Instant,
     pub completion_time: Instant,
 }
-
+ 
 impl CompletedRecord {
     pub fn wait_ms(&self) -> f64 {
         self.dispatch_time.duration_since(self.arrival_time).as_secs_f64() * 1000.0
@@ -62,7 +62,7 @@ impl CompletedRecord {
         self.completion_time.duration_since(self.arrival_time).as_secs_f64() * 1000.0
     }
 }
-
+ 
 // Snapshot taken by the monitor thread every 10 ms.
 struct MonitorSnapshot {
     elapsed_ms: u64,
@@ -72,9 +72,9 @@ struct MonitorSnapshot {
     io_q: usize,
     completed: usize,
 }
-
+ 
 // ── Result ────────────────────────────────────────────────────────────────────
-
+ 
 pub struct SimulationResult {
     pub label: String,
     pub policy: Policy,
@@ -90,7 +90,7 @@ pub struct SimulationResult {
     pub avg_active_workers: f64,
     pub peak_queue_len: usize,
 }
-
+ 
 impl SimulationResult {
     pub fn print(&self) {
         println!("  Policy            : {}", self.policy);
@@ -105,9 +105,9 @@ impl SimulationResult {
         println!("  Peak queue length : {}", self.peak_queue_len);
     }
 }
-
+ 
 // ── Thread message types ──────────────────────────────────────────────────────
-
+ 
 /// Messages flowing INTO the dispatcher.
 enum DispatchMsg {
     /// A new task has arrived from the generator.
@@ -121,34 +121,34 @@ enum DispatchMsg {
     /// Generator has sent all tasks; no more Arrived messages will come.
     GeneratorDone,
 }
-
+ 
 /// Messages flowing FROM the dispatcher TO a worker.
 enum WorkerMsg {
     Execute { task: Task, dispatch_time: Instant },
     Shutdown,
 }
-
+ 
 // ── run_simulation ─────────────────────────────────────────────────────────────
-
+ 
 pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
     let sim_start = Instant::now();
-
+ 
     // Shared state for monitor thread.
     let shared = Arc::new(Mutex::new(SharedState::new()));
     let monitor_stop = Arc::new(AtomicBool::new(false));
-
+ 
     // Dispatcher receives from both generator and workers via a single channel.
     let (disp_tx, disp_rx) = std::sync::mpsc::channel::<DispatchMsg>();
-
+ 
     // Per-worker channels.
     let mut worker_txs: Vec<std::sync::mpsc::Sender<WorkerMsg>> = Vec::new();
     let mut worker_handles: Vec<thread::JoinHandle<()>> = Vec::new();
-
+ 
     for worker_id in 0..cfg.workers {
         let (w_tx, w_rx) = std::sync::mpsc::channel::<WorkerMsg>();
         worker_txs.push(w_tx);
         let disp_tx_clone = disp_tx.clone();
-
+ 
         let handle = thread::spawn(move || {
             loop {
                 match w_rx.recv() {
@@ -174,7 +174,7 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
         });
         worker_handles.push(handle);
     }
-
+ 
     // Generator thread: emits tasks at arrival_interval_ms, then signals done.
     {
         let disp_tx_gen = disp_tx.clone();
@@ -194,7 +194,7 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
             let _ = disp_tx_gen.send(DispatchMsg::GeneratorDone);
         });
     }
-
+ 
     // Monitor thread: samples SharedState every 10 ms.
     let snapshots: Arc<Mutex<Vec<MonitorSnapshot>>> = Arc::new(Mutex::new(Vec::new()));
     {
@@ -220,22 +220,22 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
             }
         });
     }
-
+ 
     // ── Dispatcher logic ───────────────────────────────────────────────────────
-
+ 
     // The dispatcher runs on the current thread (main) until all tasks complete.
     // This keeps the design simple: no extra thread, and the loop is the
     // "think before send" manager the spec requires.
-
+ 
     let mut cpu_queue: VecDeque<Task> = VecDeque::new();
     let mut io_queue: VecDeque<Task> = VecDeque::new();
     let mut fifo_queue: VecDeque<Task> = VecDeque::new();
-
+ 
     let mut free_workers: VecDeque<usize> = (0..cfg.workers).collect();
     let mut current_cpu: f64 = 0.0;
     let mut generator_done = false;
     let mut completed_records: Vec<CompletedRecord> = Vec::new();
-
+ 
     // Helper: update shared state so the monitor can read it.
     let update_shared = |shared: &Arc<Mutex<SharedState>>,
                           cpu: f64,
@@ -250,7 +250,7 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
         s.cpu_queue_len = cq;
         s.io_queue_len = iq;
     };
-
+ 
     loop {
         // Try to dispatch as many tasks as possible before blocking on recv.
         loop {
@@ -276,7 +276,7 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
                 break;
             }
         }
-
+ 
         // Update monitor snapshot.
         let active = cfg.workers - free_workers.len();
         let (cq, iq) = match cfg.policy {
@@ -284,37 +284,46 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
             Policy::Optimized => (cpu_queue.len(), io_queue.len()),
         };
         update_shared(&shared, current_cpu, active, completed_records.len(), cq, iq);
-
+ 
         // Check for termination: generator done, no queued tasks, no busy workers.
         let queued = fifo_queue.len() + cpu_queue.len() + io_queue.len();
         if generator_done && queued == 0 && active == 0 {
             break;
         }
-
-        // Block until the next message.
-        match disp_rx.recv() {
-            Ok(DispatchMsg::Arrived(task)) => {
-                match cfg.policy {
-                    Policy::Fifo => fifo_queue.push_back(task),
-                    Policy::Optimized => match task.kind {
-                        TaskKind::Cpu => cpu_queue.push_back(task),
-                        TaskKind::Io => io_queue.push_back(task),
-                    },
+ 
+        // If there are queued tasks, don't block forever — use a short timeout
+        // so we can re-attempt dispatch as soon as a worker frees up.
+        // If queues are empty, block normally to avoid busy-waiting.
+        let queued_now = fifo_queue.len() + cpu_queue.len() + io_queue.len();
+        let msg = if queued_now > 0 {
+            disp_rx.recv_timeout(Duration::from_millis(1)).ok()
+        } else {
+            disp_rx.recv().ok()
+        };
+        if let Some(msg) = msg {
+            match msg {
+                DispatchMsg::Arrived(task) => {
+                    match cfg.policy {
+                        Policy::Fifo => fifo_queue.push_back(task),
+                        Policy::Optimized => match task.kind {
+                            TaskKind::Cpu => cpu_queue.push_back(task),
+                            TaskKind::Io => io_queue.push_back(task),
+                        },
+                    }
+                }
+                DispatchMsg::WorkerFree { worker_id, cpu_released, record } => {
+                    current_cpu -= cpu_released;
+                    if current_cpu < 0.0 { current_cpu = 0.0; }
+                    free_workers.push_back(worker_id);
+                    completed_records.push(record);
+                }
+                DispatchMsg::GeneratorDone => {
+                    generator_done = true;
                 }
             }
-            Ok(DispatchMsg::WorkerFree { worker_id, cpu_released, record }) => {
-                current_cpu -= cpu_released;
-                if current_cpu < 0.0 { current_cpu = 0.0; }
-                free_workers.push_back(worker_id);
-                completed_records.push(record);
-            }
-            Ok(DispatchMsg::GeneratorDone) => {
-                generator_done = true;
-            }
-            Err(_) => break,
         }
     }
-
+ 
     // Shut down all workers.
     for tx in &worker_txs {
         let _ = tx.send(WorkerMsg::Shutdown);
@@ -322,23 +331,23 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
     for h in worker_handles {
         let _ = h.join();
     }
-
+ 
     // Stop monitor.
     monitor_stop.store(true, Ordering::Relaxed);
     thread::sleep(Duration::from_millis(15)); // let monitor tick once more then exit
-
+ 
     let makespan_ms = sim_start.elapsed().as_secs_f64() * 1000.0;
-
+ 
     // ── Compute result metrics ────────────────────────────────────────────────
-
+ 
     let total = completed_records.len();
     let cpu_done = completed_records.iter().filter(|r| r.kind == TaskKind::Cpu).count();
     let io_done = total - cpu_done;
-
+ 
     let avg_wait = completed_records.iter().map(|r| r.wait_ms()).sum::<f64>() / total as f64;
     let max_wait = completed_records.iter().map(|r| r.wait_ms()).fold(0.0_f64, f64::max);
     let avg_turn = completed_records.iter().map(|r| r.turnaround_ms()).sum::<f64>() / total as f64;
-
+ 
     let snaps = snapshots.lock().unwrap();
     let avg_cpu = if snaps.is_empty() {
         0.0
@@ -351,7 +360,7 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
         snaps.iter().map(|s| s.active_workers as f64).sum::<f64>() / snaps.len() as f64
     };
     let peak_q = snaps.iter().map(|s| s.cpu_q + s.io_q).max().unwrap_or(0);
-
+ 
     SimulationResult {
         label: label.to_string(),
         policy: cfg.policy,
@@ -368,9 +377,9 @@ pub fn run_simulation(label: &str, cfg: Config) -> SimulationResult {
         peak_queue_len: peak_q,
     }
 }
-
+ 
 // ── Dispatch helpers ──────────────────────────────────────────────────────────
-
+ 
 /// FIFO: try to dispatch the front of the single queue.
 /// Returns true if a task was sent to a worker.
 fn try_dispatch_fifo(
@@ -396,10 +405,13 @@ fn try_dispatch_fifo(
     });
     true
 }
-
-/// Optimized: two queues. Pick whichever task can run and maximises
-/// CPU utilisation. Priority: if CPU budget allows a CPU task, prefer it
-/// (scarce resource); otherwise try an IO task.
+ 
+/// Optimized: two queues. Pick the task that best fills the remaining CPU
+/// budget. Tries to pack workers greedily:
+///   - If a CPU task fits AND fills budget better than IO, prefer CPU
+///   - If CPU doesn't fit but IO does, take IO
+///   - If both fit, prefer CPU (35% is the scarce resource)
+///   - Special case: if remaining budget is exactly 10% (only IO fits), take IO
 fn try_dispatch_optimized(
     cpu_queue: &mut VecDeque<Task>,
     io_queue: &mut VecDeque<Task>,
@@ -407,15 +419,25 @@ fn try_dispatch_optimized(
     current_cpu: &mut f64,
     worker_txs: &[std::sync::mpsc::Sender<WorkerMsg>],
 ) -> bool {
-    // Try CPU task first (35 % cost); then IO task (10 % cost).
-    let chosen: Option<Task> = if !cpu_queue.is_empty() && *current_cpu + 35.0 <= 100.0 + 1e-9 {
+    let remaining = 100.0 - *current_cpu;
+ 
+    // Determine what fits
+    let cpu_fits = !cpu_queue.is_empty() && remaining >= 35.0 - 1e-9;
+    let io_fits  = !io_queue.is_empty()  && remaining >= 10.0 - 1e-9;
+ 
+    let chosen: Option<Task> = if cpu_fits && io_fits {
+        // Both fit — prefer CPU task to consume the scarce budget slot.
+        // Exception: if we have many more IO tasks queued and budget is tight,
+        // still prefer CPU first (greedier = lower makespan).
         Some(cpu_queue.pop_front().unwrap())
-    } else if !io_queue.is_empty() && *current_cpu + 10.0 <= 100.0 + 1e-9 {
+    } else if cpu_fits {
+        Some(cpu_queue.pop_front().unwrap())
+    } else if io_fits {
         Some(io_queue.pop_front().unwrap())
     } else {
         None
     };
-
+ 
     match chosen {
         None => false,
         Some(task) => {

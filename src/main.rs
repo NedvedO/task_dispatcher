@@ -1,20 +1,20 @@
 mod task;
 mod shared;
 mod simulation;
-
+ 
 use simulation::{Config, Policy, run_simulation};
 use std::env;
-
+ 
 fn separator(title: &str) {
     println!("\n{}", "=".repeat(60));
     println!("  {}", title);
     println!("{}", "=".repeat(60));
 }
-
+ 
 fn main() {
     // Optional CLI arg: "fifo70" | "opt70" | "fifo80" | "opt80" | "all" (default)
     let arg = env::args().nth(1).unwrap_or_else(|| "all".to_string());
-
+ 
     let configs: Vec<(&str, Config)> = vec![
         (
             "Experiment A — 70/30 IO/CPU  |  FIFO",
@@ -61,7 +61,7 @@ fn main() {
             },
         ),
     ];
-
+ 
     // Filter based on CLI arg.
     let selected: Vec<_> = configs
         .into_iter()
@@ -75,13 +75,13 @@ fn main() {
             }
         })
         .collect();
-
+ 
     println!("\nConcurrent Task Dispatcher — Systems Programming Final Project");
     println!("Running {} simulation(s). Each task sleeps 200 ms; workers = 8.", selected.len());
     println!("Arrival interval = 20 ms  |  Total tasks = 1000  |  Seed = 42");
-
+ 
     let mut results = Vec::new();
-
+ 
     for (label, cfg) in selected {
         separator(label);
         println!("  [running — this takes ~30-40 s per simulation]");
@@ -89,7 +89,7 @@ fn main() {
         result.print();
         results.push(result);
     }
-
+ 
     // ── Comparison summary ────────────────────────────────────────────────────
     if results.len() >= 2 {
         separator("COMPARISON SUMMARY");
@@ -104,7 +104,7 @@ fn main() {
                 r.avg_turnaround_ms,
                 r.avg_cpu_utilisation);
         }
-
+ 
         // If we have both FIFO and Optimized for the same ratio, print delta.
         for ratio_label in ["70/30", "80/20"] {
             let fifo = results.iter().find(|r| {
@@ -123,6 +123,6 @@ fn main() {
             }
         }
     }
-
+ 
     println!("\nDone.");
 }
